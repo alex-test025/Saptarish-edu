@@ -1,0 +1,6 @@
+{
+  "name": "Edu Saptarish Enrollment & Form Studio",
+  "description": "Official Live Online Class Enrollment Form and Step-by-Step Google Form Builder for Edu Saptarish – Learn, Speak, Grow!",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
