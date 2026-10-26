@@ -1,18 +1,33 @@
 import React, { useState } from 'react';
-import { EnrollmentSubmission, PROGRAMS, ProgramId } from '../utils/enrollmentLogic';
-import { Download, Search, Plus } from 'lucide-react';
+import {
+  EnrollmentSubmission,
+  PROGRAMS,
+  ProgramId,
+  generateGoogleSheetsWebhookScript
+} from '../utils/enrollmentLogic';
+import { Download, Search, Plus, Copy, Check, FileSpreadsheet, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface SubmissionsDirectoryProps {
   submissions: EnrollmentSubmission[];
   onNewEnrollment: () => void;
+  sheetsWebhookUrl: string;
+  onSaveWebhookUrl: (url: string) => void;
 }
 
 export const SubmissionsDirectory: React.FC<SubmissionsDirectoryProps> = ({
   submissions,
-  onNewEnrollment
+  onNewEnrollment,
+  sheetsWebhookUrl,
+  onSaveWebhookUrl
 }) => {
   const [filterProgram, setFilterProgram] = useState<'all' | ProgramId>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [webhookInput, setWebhookInput] = useState(sheetsWebhookUrl);
+  const [savedBanner, setSavedBanner] = useState(false);
+  const [showScriptModal, setShowScriptModal] = useState(false);
+  const [copiedScript, setCopiedScript] = useState(false);
+
+  const webhookScript = generateGoogleSheetsWebhookScript();
 
   const filteredSubmissions = submissions.filter((sub) => {
     const matchesProgram = filterProgram === 'all' || sub.programId === filterProgram;
@@ -84,8 +99,129 @@ export const SubmissionsDirectory: React.FC<SubmissionsDirectoryProps> = ({
     URL.revokeObjectURL(url);
   };
 
+  const handleSaveWebhook = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSaveWebhookUrl(webhookInput.trim());
+    setSavedBanner(true);
+    setTimeout(() => setSavedBanner(false), 2500);
+  };
+
+  const handleCopyWebhookScript = () => {
+    navigator.clipboard?.writeText(webhookScript);
+    setCopiedScript(true);
+    setTimeout(() => setCopiedScript(false), 2000);
+  };
+
   return (
     <div className="space-y-6">
+      {/* Where to See Responses & Google Sheets Live Sync Guide */}
+      <div className="bg-white border border-slate-200 rounded-xl p-6 md:p-8 space-y-6">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-200 pb-5">
+          <div>
+            <div className="text-xs font-medium text-[#0284C7]">
+              Admin Response Center · Google Sheets & Website Sync
+            </div>
+            <h2 className="text-xl md:text-2xl font-bold text-slate-900 mt-1 tracking-tight">
+              Where & How to View Your Student Enrollment Responses
+            </h2>
+            <p className="text-xs text-slate-600 mt-1 leading-relaxed max-w-3xl">
+              Depending on whether students fill out your <strong>Google Form</strong> or this <strong>Vercel Website</strong>, here are the three places where you can view and export every response:
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowScriptModal((prev) => !prev)}
+            className="px-4 py-2 text-xs font-semibold text-slate-800 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg transition-colors flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-[#0284C7]" />
+            {showScriptModal ? 'Hide Google Sheets Setup Script' : 'View Google Sheets Connector Script'}
+            {showScriptModal ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 text-xs">
+          <div className="p-4 rounded-lg border border-slate-200 bg-slate-50/60 space-y-1.5">
+            <span className="font-mono font-bold text-[#0284C7]">01. On This Page (Instant Roster)</span>
+            <h3 className="text-sm font-bold text-slate-900">
+              4. Responses Tab & CSV Download
+            </h3>
+            <p className="text-slate-600 leading-relaxed">
+              Every test or live enrollment submitted in this browser is saved automatically in the table below. Click <strong>Download CSV</strong> anytime to open the roster in Excel or Google Sheets.
+            </p>
+          </div>
+
+          <div className="p-4 rounded-lg border border-slate-200 bg-slate-50/60 space-y-1.5">
+            <span className="font-mono font-bold text-[#0284C7]">02. Inside Google Forms</span>
+            <h3 className="text-sm font-bold text-slate-900">
+              Responses Tab → Link to Sheets
+            </h3>
+            <p className="text-slate-600 leading-relaxed">
+              When using a Google Form created at <strong>forms.google.com</strong>, open your form editor, click the <strong>Responses</strong> tab at the top, and click <strong>Link to Sheets</strong> to view all submissions in Google Drive.
+            </p>
+          </div>
+
+          <div className="p-4 rounded-lg border border-slate-200 bg-slate-50/60 space-y-1.5">
+            <span className="font-mono font-bold text-[#0284C7]">03. Vercel Website → Google Sheets</span>
+            <h3 className="text-sm font-bold text-slate-900">
+              Connect Your Google Sheet Webhook
+            </h3>
+            <p className="text-slate-600 leading-relaxed">
+              So students submitting from their own phones on your Vercel link appear in your Google Sheet automatically, paste your Google Apps Script Web App URL below.
+            </p>
+          </div>
+        </div>
+
+        {/* Google Sheets Webhook URL Connector */}
+        <form onSubmit={handleSaveWebhook} className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-end gap-3">
+          <div className="flex-1">
+            <label htmlFor="sheetsWebhookInput" className="block text-xs font-semibold text-slate-800 mb-1.5">
+              Google Sheets Web App URL (Optional — Auto-saves every Vercel website submission into your Google Sheet)
+            </label>
+            <input
+              id="sheetsWebhookInput"
+              type="url"
+              placeholder="https://script.google.com/macros/s/.../exec"
+              value={webhookInput}
+              onChange={(e) => setWebhookInput(e.target.value)}
+              className="w-full px-3.5 py-2 text-xs font-mono rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-[#0284C7]"
+            />
+          </div>
+          <button
+            type="submit"
+            className="px-4 py-2 text-xs font-semibold text-white bg-[#0284C7] hover:bg-[#0369A1] rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+          >
+            {savedBanner ? 'Webhook Saved!' : 'Save Google Sheet URL'}
+          </button>
+        </form>
+
+        {showScriptModal && (
+          <div className="bg-[#0F172A] text-white rounded-lg p-5 border border-slate-800 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+              <div>
+                <h4 className="text-sm font-bold">
+                  Google Sheets Auto-Receiver Script (For Your Vercel Website)
+                </h4>
+                <p className="text-xs text-slate-300 mt-0.5">
+                  Open <strong>sheets.new</strong> → click <strong>Extensions → Apps Script</strong> → paste this script → click <strong>Deploy → New deployment (Web app, Access: Anyone)</strong> → paste the Web App URL above!
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleCopyWebhookScript}
+                className="px-3 py-1.5 text-xs font-semibold text-slate-950 bg-sky-400 hover:bg-sky-300 rounded flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
+              >
+                {copiedScript ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                {copiedScript ? 'Copied Script' : 'Copy Sheets Script'}
+              </button>
+            </div>
+            <pre className="text-xs font-mono text-slate-200 overflow-x-auto max-h-64 p-3 rounded bg-slate-950 border border-slate-800 leading-relaxed">
+              {webhookScript}
+            </pre>
+          </div>
+        )}
+      </div>
+
+      {/* Submissions Roster Table */}
       <div className="bg-white border border-slate-200 rounded-xl p-6 md:p-8">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-200">
           <div>

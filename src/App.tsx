@@ -3,11 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   PROGRAMS,
   INITIAL_SUBMISSIONS,
   CONFIRMATION_MESSAGE,
+  SUBMISSIONS_STORAGE_KEY,
+  WEBHOOK_STORAGE_KEY,
   ProgramId,
   EnrollmentSubmission
 } from './utils/enrollmentLogic';
@@ -21,10 +23,63 @@ type ActiveTab = 'form' | 'guide' | 'programs' | 'submissions';
 export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('form');
   const [selectedProgramId, setSelectedProgramId] = useState<ProgramId>('nursery-class-8');
-  const [submissions, setSubmissions] = useState<EnrollmentSubmission[]>(INITIAL_SUBMISSIONS);
+
+  const [submissions, setSubmissions] = useState<EnrollmentSubmission[]>(() => {
+    try {
+      const saved = localStorage.getItem(SUBMISSIONS_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch {
+      // ignore storage errors
+    }
+    return INITIAL_SUBMISSIONS;
+  });
+
+  const [sheetsWebhookUrl, setSheetsWebhookUrl] = useState<string>(() => {
+    try {
+      return (
+        localStorage.getItem(WEBHOOK_STORAGE_KEY) ||
+        (import.meta.env.VITE_GOOGLE_SHEETS_WEBHOOK_URL as string) ||
+        ''
+      );
+    } catch {
+      return '';
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(SUBMISSIONS_STORAGE_KEY, JSON.stringify(submissions));
+    } catch {
+      // ignore storage errors
+    }
+  }, [submissions]);
+
+  const handleSaveWebhookUrl = (url: string) => {
+    setSheetsWebhookUrl(url);
+    try {
+      localStorage.setItem(WEBHOOK_STORAGE_KEY, url);
+    } catch {
+      // ignore storage errors
+    }
+  };
 
   const handleSubmissionComplete = (newSub: EnrollmentSubmission) => {
     setSubmissions((prev) => [newSub, ...prev]);
+    if (sheetsWebhookUrl && sheetsWebhookUrl.trim().startsWith('https://script.google.com/')) {
+      fetch(sheetsWebhookUrl.trim(), {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(newSub)
+      }).catch(() => {
+        // Non-blocking background sync to Google Sheets
+      });
+    }
   };
 
   const handleChooseProgramAndEnroll = (programId: ProgramId) => {
@@ -260,6 +315,8 @@ export default function App() {
             <SubmissionsDirectory
               submissions={submissions}
               onNewEnrollment={() => setActiveTab('form')}
+              sheetsWebhookUrl={sheetsWebhookUrl}
+              onSaveWebhookUrl={handleSaveWebhookUrl}
             />
           )}
         </section>

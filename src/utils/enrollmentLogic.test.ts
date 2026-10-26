@@ -128,3 +128,13 @@ test('confirmation message and Google Apps Script include all 11 fields and pric
   assert.ok(script.includes('Professional Communication'));
   assert.ok(script.includes('PROGRAMS') || PROGRAMS.length === 4);
 });
+
+test('Google Sheets webhook script generator includes doPost and all 11 enrollment columns', async () => {
+  const { generateGoogleSheetsWebhookScript } = await import('./enrollmentLogic');
+  const webhookScript = generateGoogleSheetsWebhookScript();
+  assert.ok(webhookScript.includes('function doPost(e)'));
+  assert.ok(webhookScript.includes('Student/Participant Name'));
+  assert.ok(webhookScript.includes('Preferred Timing'));
+  assert.ok(webhookScript.includes('Learning Goals'));
+});
+

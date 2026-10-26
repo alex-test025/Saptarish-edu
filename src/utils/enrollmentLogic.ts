@@ -445,6 +445,58 @@ function createEduSaptarishEnrollmentForm() {
 }`;
 }
 
+export const SUBMISSIONS_STORAGE_KEY = 'edu_saptarish_submissions_v1';
+export const WEBHOOK_STORAGE_KEY = 'edu_saptarish_sheets_webhook_v1';
+
+export function generateGoogleSheetsWebhookScript(): string {
+  return `/**
+ * Edu Saptarish – Live Website to Google Sheets Connector
+ * Use this script so enrollments submitted on your Vercel website save directly to a Google Sheet!
+ *
+ * SETUP IN 4 STEPS:
+ * 1. Open https://sheets.new and name the sheet "Edu Saptarish Enrollments"
+ * 2. Click Extensions -> Apps Script, and paste this code into Code.gs
+ * 3. Click Deploy -> New deployment -> Select type: "Web app"
+ *    - Execute as: "Me"
+ *    - Who has access: "Anyone"
+ * 4. Click Deploy, copy the "Web app URL", and paste it into the "Connect Google Sheet" box on your website!
+ */
+function doPost(e) {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow([
+      'Enrollment ID', 'Submitted At', 'Student/Participant Name', 'Age', 'Class',
+      'Parent/Guardian Name', 'Mobile/WhatsApp', 'Email', 'City', 'State',
+      'Program', 'Monthly Fee (INR)', 'Preferred Timing', 'Learning Goals',
+      'Payment Method', 'Payment Status', 'Transaction Ref', 'Mode'
+    ]);
+  }
+  var data = JSON.parse(e.postData.contents);
+  sheet.appendRow([
+    data.id || '',
+    data.submittedAt || new Date().toLocaleString('en-IN'),
+    data.participantName || '',
+    data.age || '',
+    data.studentClass || '',
+    data.parentGuardianName || 'N/A',
+    data.mobileWhatsapp || '',
+    data.email || '',
+    data.city || '',
+    data.state || '',
+    data.programName || '',
+    data.monthlyFee || '',
+    data.preferredTiming || '',
+    Array.isArray(data.learningGoals) ? data.learningGoals.join(', ') : (data.learningGoals || ''),
+    data.paymentMethod || '',
+    data.paymentStatus || '',
+    data.transactionReference || '',
+    data.mode || 'Live Online Classes'
+  ]);
+  return ContentService.createTextOutput(JSON.stringify({ status: 'ok', id: data.id }))
+    .setMimeType(ContentService.MimeType.JSON);
+}`;
+}
+
 export const INITIAL_SUBMISSIONS: EnrollmentSubmission[] = [
   {
     id: 'ES-2026-1041',
