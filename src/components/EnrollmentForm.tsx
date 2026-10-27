@@ -15,20 +15,26 @@ import {
   calculateFeeSummary,
   validateEnrollmentForm
 } from '../utils/enrollmentLogic';
-import { CheckCircle2, AlertCircle, ArrowRight, RotateCcw, Copy, Check } from 'lucide-react';
+import {
+  CheckCircle2,
+  AlertCircle,
+  ArrowRight,
+  RotateCcw,
+  Copy,
+  Check,
+  MailCheck
+} from 'lucide-react';
 
 interface EnrollmentFormProps {
   selectedProgramId: ProgramId;
   onSelectProgram: (id: ProgramId) => void;
   onSubmissionComplete: (submission: EnrollmentSubmission) => void;
-  onNavigateToSubmissions: () => void;
 }
 
 export const EnrollmentForm: React.FC<EnrollmentFormProps> = ({
   selectedProgramId,
   onSelectProgram,
-  onSubmissionComplete,
-  onNavigateToSubmissions
+  onSubmissionComplete
 }) => {
   const [formData, setFormData] = useState<EnrollmentFormData>({
     participantName: '',
@@ -52,7 +58,6 @@ export const EnrollmentForm: React.FC<EnrollmentFormProps> = ({
   const [submittedRecord, setSubmittedRecord] = useState<EnrollmentSubmission | null>(null);
   const [copiedReceipt, setCopiedReceipt] = useState(false);
 
-  // Sync external program selection changes
   React.useEffect(() => {
     const prog = getProgramById(selectedProgramId);
     setFormData((prev) => ({
@@ -101,49 +106,6 @@ export const EnrollmentForm: React.FC<EnrollmentFormProps> = ({
     });
     if (errors.learningGoals) {
       setErrors((prev) => ({ ...prev, learningGoals: undefined }));
-    }
-  };
-
-  const handlePrefillSample = (type: 'student' | 'professional') => {
-    setErrors({});
-    if (type === 'student') {
-      onSelectProgram('nursery-class-8');
-      setFormData({
-        participantName: 'Ananya Kulkarni',
-        age: '12',
-        studentClass: 'Class 7',
-        parentGuardianName: 'Sandeep Kulkarni',
-        mobileWhatsapp: '+91 9845098765',
-        email: 'sandeep.kulkarni@example.com',
-        city: 'Bengaluru',
-        state: 'Karnataka',
-        programId: 'nursery-class-8',
-        preferredTiming: 'Afternoon School Batch (04:00 PM – 05:00 PM IST)',
-        learningGoals: ['Spoken English', 'Grammar', 'Public Speaking', 'Confidence Building'],
-        paymentMethod: 'UPI (Google Pay / PhonePe / Paytm)',
-        paymentStatus: 'Paid – Transaction Completed',
-        transactionReference: 'UPI-4288192034',
-        consentAccepted: true
-      });
-    } else {
-      onSelectProgram('working-professionals');
-      setFormData({
-        participantName: 'Rohan Malhotra',
-        age: '28',
-        studentClass: 'Not Applicable (Adult Learner)',
-        parentGuardianName: '',
-        mobileWhatsapp: '+91 9811223344',
-        email: 'rohan.malhotra@example.com',
-        city: 'Gurugram',
-        state: 'Haryana',
-        programId: 'working-professionals',
-        preferredTiming: 'Late Evening Professional Batch (08:30 PM – 09:30 PM IST)',
-        learningGoals: ['Professional Communication', 'Public Speaking', 'Confidence Building'],
-        paymentMethod: 'Credit / Debit Card',
-        paymentStatus: 'Paid – Transaction Completed',
-        transactionReference: 'CARD-9910234',
-        consentAccepted: true
-      });
     }
   };
 
@@ -204,9 +166,14 @@ export const EnrollmentForm: React.FC<EnrollmentFormProps> = ({
       `EDU SAPTARISH – LEARN, SPEAK, GROW!`,
       `Enrollment Confirmation Receipt (${submittedRecord.id})`,
       `Mode: ${submittedRecord.mode}`,
-      `Participant: ${submittedRecord.participantName} (Age: ${submittedRecord.age}, Class: ${submittedRecord.studentClass})`,
-      submittedRecord.parentGuardianName ? `Parent/Guardian: ${submittedRecord.parentGuardianName}` : null,
-      `Program: ${submittedRecord.programName} — ₹${submittedRecord.monthlyFee.toLocaleString('en-IN')}/month`,
+      `Student / Participant Name: ${submittedRecord.participantName}`,
+      `Age & Class: ${submittedRecord.age} Years (${submittedRecord.studentClass})`,
+      submittedRecord.parentGuardianName
+        ? `Parent / Guardian Name: ${submittedRecord.parentGuardianName}`
+        : null,
+      `Email ID: ${submittedRecord.email}`,
+      `Contact Details: ${submittedRecord.mobileWhatsapp} (${submittedRecord.city}, ${submittedRecord.state})`,
+      `Selected Course: ${submittedRecord.programName} — ₹${submittedRecord.monthlyFee.toLocaleString('en-IN')}/month`,
       `Preferred Timing: ${submittedRecord.preferredTiming}`,
       `Learning Goals: ${submittedRecord.learningGoals.join(', ')}`,
       `Payment: ${submittedRecord.paymentMethod} (${submittedRecord.paymentStatus})`,
@@ -235,7 +202,7 @@ export const EnrollmentForm: React.FC<EnrollmentFormProps> = ({
               Enrollment Confirmed · Reference {submittedRecord.id} · Mode: {submittedRecord.mode}
             </div>
             <h2 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">
-              Application Recorded Successfully
+              Thank You for Enrolling!
             </h2>
             <p
               data-testid="confirmation-message-text"
@@ -246,7 +213,14 @@ export const EnrollmentForm: React.FC<EnrollmentFormProps> = ({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 py-6 border-b border-slate-200 text-sm">
+        <div className="my-5 p-4 rounded-lg bg-sky-50/70 border border-sky-200 flex items-start gap-3 text-xs text-slate-700">
+          <MailCheck className="w-4 h-4 text-[#0284C7] shrink-0 mt-0.5" />
+          <div>
+            <strong className="text-slate-900">Confirmation Email Sent:</strong> Your enrollment details (Student Name, Email ID, Contact Details, and Selected Course) have been recorded and a confirmation copy is sent to <span className="font-mono font-semibold text-slate-900">{submittedRecord.email}</span>.
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 py-5 border-b border-slate-200 text-sm">
           <div>
             <span className="text-slate-500 block">Student / Participant Name</span>
             <span className="font-semibold text-slate-900 mt-0.5 block">
@@ -268,19 +242,19 @@ export const EnrollmentForm: React.FC<EnrollmentFormProps> = ({
             </div>
           )}
           <div>
-            <span className="text-slate-500 block">Contact (WhatsApp & Email)</span>
-            <span className="font-semibold text-slate-900 mt-0.5 block tabular-nums">
-              {submittedRecord.mobileWhatsapp} · {submittedRecord.email}
-            </span>
-          </div>
-          <div>
-            <span className="text-slate-500 block">City & State</span>
+            <span className="text-slate-500 block">Email ID</span>
             <span className="font-semibold text-slate-900 mt-0.5 block">
-              {submittedRecord.city}, {submittedRecord.state}
+              {submittedRecord.email}
             </span>
           </div>
           <div>
-            <span className="text-slate-500 block">Enrolled Program & Monthly Fee</span>
+            <span className="text-slate-500 block">Contact Details</span>
+            <span className="font-semibold text-slate-900 mt-0.5 block tabular-nums">
+              {submittedRecord.mobileWhatsapp} · {submittedRecord.city}, {submittedRecord.state}
+            </span>
+          </div>
+          <div>
+            <span className="text-slate-500 block">Selected Course & Monthly Fee</span>
             <span className="font-semibold text-[#0284C7] mt-0.5 block tabular-nums">
               {submittedRecord.programName} · ₹{submittedRecord.monthlyFee.toLocaleString('en-IN')} / month
             </span>
@@ -305,31 +279,26 @@ export const EnrollmentForm: React.FC<EnrollmentFormProps> = ({
           </div>
         </div>
 
-        <div className="pt-6 flex flex-wrap items-center justify-between gap-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              onClick={handleReset}
-              className="px-4 py-2.5 text-sm font-semibold text-white bg-[#0284C7] hover:bg-[#0369A1] rounded-lg transition-colors flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer"
-            >
-              <RotateCcw className="w-4 h-4" />
-              Submit Another Enrollment
-            </button>
-            <button
-              type="button"
-              onClick={onNavigateToSubmissions}
-              className="px-4 py-2.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-            >
-              View Enrollment Records
-            </button>
-          </div>
+        <div className="pt-6 flex flex-wrap items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={handleReset}
+            className="px-4 py-2.5 text-xs font-semibold text-white bg-[#0284C7] hover:bg-[#0369A1] rounded-lg transition-colors flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            Submit Another Enrollment
+          </button>
 
           <button
             type="button"
             onClick={handleCopyReceipt}
             className="px-3.5 py-2 text-xs font-medium text-slate-600 hover:text-slate-900 border border-slate-200 rounded-lg flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
           >
-            {copiedReceipt ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+            {copiedReceipt ? (
+              <Check className="w-3.5 h-3.5 text-emerald-600" />
+            ) : (
+              <Copy className="w-3.5 h-3.5" />
+            )}
             {copiedReceipt ? 'Receipt Copied' : 'Copy Confirmation Summary'}
           </button>
         </div>
@@ -349,13 +318,13 @@ export const EnrollmentForm: React.FC<EnrollmentFormProps> = ({
         {/* Form Top Banner */}
         <div className="bg-[#0F172A] text-white p-6 md:p-8 border-b border-slate-800">
           <div className="text-xs text-sky-300 font-medium tracking-wide">
-            Official Admission Form · Mode: Live Online Classes · All Ages & Tracks
+            Official Admission Form · Mode: Live Online Classes
           </div>
           <h2 className="text-2xl md:text-3xl font-bold mt-2 tracking-tight">
             Edu Saptarish – Learn, Speak, Grow!
           </h2>
           <p className="text-slate-300 text-sm mt-2 leading-relaxed max-w-2xl">
-            Complete the 11-point enrollment form below to register for interactive live online classes in Spoken English, Grammar, Public Speaking, Confidence Building, and Professional Communication.
+            Complete the enrollment form below to register for interactive live online classes in Spoken English, Grammar, Public Speaking, Confidence Building, and Professional Communication.
           </p>
         </div>
 
@@ -368,9 +337,7 @@ export const EnrollmentForm: React.FC<EnrollmentFormProps> = ({
               <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
               <div>
                 <p className="font-semibold">Please review the highlighted fields before submitting:</p>
-                <p className="mt-1 text-xs text-red-700">
-                  {Object.values(errors)[0]}
-                </p>
+                <p className="mt-1 text-xs text-red-700">{Object.values(errors)[0]}</p>
               </div>
             </div>
           )}
@@ -379,7 +346,7 @@ export const EnrollmentForm: React.FC<EnrollmentFormProps> = ({
           <section aria-labelledby="section-program-heading" className="space-y-4">
             <div className="border-b border-slate-200 pb-3">
               <h3 id="section-program-heading" className="text-lg font-semibold text-slate-900">
-                01. Select Enrollment Program (Field 7)
+                01. Select Program
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
                 Choose the learner track. Monthly tuition fees update automatically based on your selection.
@@ -427,7 +394,7 @@ export const EnrollmentForm: React.FC<EnrollmentFormProps> = ({
           <section aria-labelledby="section-participant-heading" className="space-y-5">
             <div className="border-b border-slate-200 pb-3">
               <h3 id="section-participant-heading" className="text-lg font-semibold text-slate-900">
-                02. Student / Participant & Guardian Details (Fields 1–3)
+                02. Student / Participant & Guardian Details
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
                 For Nursery to Class 8 students, both Class and Parent/Guardian Name are mandatory.
@@ -554,10 +521,10 @@ export const EnrollmentForm: React.FC<EnrollmentFormProps> = ({
           <section aria-labelledby="section-contact-heading" className="space-y-5">
             <div className="border-b border-slate-200 pb-3">
               <h3 id="section-contact-heading" className="text-lg font-semibold text-slate-900">
-                03. Contact & Location Information (Fields 4–6)
+                03. Contact & Location Information
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
-                Live class joining links and schedule updates are sent to your WhatsApp and Email.
+                Your enrollment confirmation and live online class schedules will be sent to your Email and WhatsApp.
               </p>
             </div>
 
@@ -662,7 +629,7 @@ export const EnrollmentForm: React.FC<EnrollmentFormProps> = ({
           <section aria-labelledby="section-learning-heading" className="space-y-5">
             <div className="border-b border-slate-200 pb-3">
               <h3 id="section-learning-heading" className="text-lg font-semibold text-slate-900">
-                04. Class Schedule & Learning Goals (Fields 8–9)
+                04. Class Schedule & Learning Goals
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
                 All cohorts are conducted via Live Online Classes with active speaking practice.
@@ -733,7 +700,7 @@ export const EnrollmentForm: React.FC<EnrollmentFormProps> = ({
           <section aria-labelledby="section-payment-heading" className="space-y-5">
             <div className="border-b border-slate-200 pb-3">
               <h3 id="section-payment-heading" className="text-lg font-semibold text-slate-900">
-                05. Preferred Payment & Enrollment Consent (Fields 10–11)
+                05. Preferred Payment & Enrollment Consent
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
                 Select your preferred payment method, current status, and accept the enrollment consent.
@@ -789,7 +756,8 @@ export const EnrollmentForm: React.FC<EnrollmentFormProps> = ({
 
               <div className="sm:col-span-2">
                 <label htmlFor="transactionReference" className="block text-sm font-medium text-slate-800 mb-1.5">
-                  UPI / Transaction Reference ID <span className="text-xs font-normal text-slate-500">(Optional if payment is pending)</span>
+                  UPI / Transaction Reference ID{' '}
+                  <span className="text-xs font-normal text-slate-500">(Optional if payment is pending)</span>
                 </label>
                 <input
                   id="transactionReference"
@@ -856,7 +824,7 @@ export const EnrollmentForm: React.FC<EnrollmentFormProps> = ({
         </div>
       </form>
 
-      {/* Right 4 Columns: Live Summary & Quick Test Prefill */}
+      {/* Right 4 Columns: Live Tuition Summary & Official Fee Structure */}
       <aside className="lg:col-span-4 space-y-6">
         <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-5">
           <div>
@@ -908,36 +876,17 @@ export const EnrollmentForm: React.FC<EnrollmentFormProps> = ({
               ))}
             </ul>
           </div>
-
-          <div className="pt-3 border-t border-slate-200">
-            <p className="text-xs font-medium text-slate-700 mb-2">
-              Quick Demo Fill (Instant Form Test)
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => handlePrefillSample('student')}
-                className="px-3 py-2 text-xs font-medium text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-              >
-                Fill Student Demo
-              </button>
-              <button
-                type="button"
-                onClick={() => handlePrefillSample('professional')}
-                className="px-3 py-2 text-xs font-medium text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-              >
-                Fill Adult Demo
-              </button>
-            </div>
-          </div>
         </div>
 
-        {/* All 4 Program Rates Quick Reference Card */}
+        {/* Official Fee Structure Card */}
         <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-3">
           <h4 className="text-sm font-semibold text-slate-900">
             Official Monthly Fee Structure
           </h4>
-          <div className="divide-y divide-slate-100 text-xs">
+          <p className="text-xs text-slate-500">
+            Mode of Instruction: Live Online Classes
+          </p>
+          <div className="divide-y divide-slate-100 text-xs pt-1">
             {PROGRAMS.map((p) => (
               <div key={p.id} className="py-2.5 flex items-center justify-between gap-2">
                 <span className="text-slate-700 font-medium">{p.name}</span>
@@ -947,9 +896,6 @@ export const EnrollmentForm: React.FC<EnrollmentFormProps> = ({
               </div>
             ))}
           </div>
-          <p className="text-xs text-slate-500 pt-1">
-            Confirmation message sent automatically on submission: “{CONFIRMATION_MESSAGE}”
-          </p>
         </div>
       </aside>
     </div>

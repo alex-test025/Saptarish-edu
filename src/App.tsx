@@ -6,91 +6,93 @@
 import React, { useState, useEffect } from 'react';
 import {
   PROGRAMS,
-  INITIAL_SUBMISSIONS,
   CONFIRMATION_MESSAGE,
-  SUBMISSIONS_STORAGE_KEY,
-  WEBHOOK_STORAGE_KEY,
+  DEFAULT_SHEETS_WEBHOOK_URL,
+  OWNER_EMAIL,
   ProgramId,
   EnrollmentSubmission
 } from './utils/enrollmentLogic';
 import { EnrollmentForm } from './components/EnrollmentForm';
 import { ProgramCatalog } from './components/ProgramCatalog';
-import { GoogleFormGuide } from './components/GoogleFormGuide';
-import { SubmissionsDirectory } from './components/SubmissionsDirectory';
 
-type ActiveTab = 'form' | 'guide' | 'programs' | 'submissions';
+type ActiveView = 'form' | 'programs';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<ActiveTab>('form');
+  const [activeView, setActiveView] = useState<ActiveView>('form');
   const [selectedProgramId, setSelectedProgramId] = useState<ProgramId>('nursery-class-8');
 
-  const [submissions, setSubmissions] = useState<EnrollmentSubmission[]>(() => {
-    try {
-      const saved = localStorage.getItem(SUBMISSIONS_STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
-        }
-      }
-    } catch {
-      // ignore storage errors
-    }
-    return INITIAL_SUBMISSIONS;
-  });
-
-  const [sheetsWebhookUrl, setSheetsWebhookUrl] = useState<string>(() => {
-    try {
-      return (
-        localStorage.getItem(WEBHOOK_STORAGE_KEY) ||
-        (import.meta.env.VITE_GOOGLE_SHEETS_WEBHOOK_URL as string) ||
-        ''
-      );
-    } catch {
-      return '';
-    }
-  });
-
+  // Clear any legacy locally stored student records on mount
   useEffect(() => {
     try {
-      localStorage.setItem(SUBMISSIONS_STORAGE_KEY, JSON.stringify(submissions));
+      localStorage.removeItem('edu_saptarish_submissions_v1');
+      localStorage.removeItem('edu_saptarish_sheets_webhook_v1');
+      localStorage.removeItem('edu_saptarish_sheets_webhook_v2');
+      localStorage.removeItem('edu_saptarish_owner_whatsapp_v1');
     } catch {
       // ignore storage errors
     }
-  }, [submissions]);
-
-  const handleSaveWebhookUrl = (url: string) => {
-    setSheetsWebhookUrl(url);
-    try {
-      localStorage.setItem(WEBHOOK_STORAGE_KEY, url);
-    } catch {
-      // ignore storage errors
-    }
-  };
+  }, []);
 
   const handleSubmissionComplete = (newSub: EnrollmentSubmission) => {
-    setSubmissions((prev) => [newSub, ...prev]);
-    if (sheetsWebhookUrl && sheetsWebhookUrl.trim().startsWith('https://script.google.com/')) {
-      fetch(sheetsWebhookUrl.trim(), {
+    const webhookUrl = (
+      (import.meta.env.VITE_GOOGLE_SHEETS_WEBHOOK_URL as string) ||
+      DEFAULT_SHEETS_WEBHOOK_URL
+    ).trim();
+
+    // 1. Primary Dispatch: Google Apps Script Web App (Saves to Google Sheet, updates Master CSV in Google Drive, emails Owner + replies to Customer)
+    if (webhookUrl.startsWith('https://script.google.com/')) {
+      fetch(webhookUrl, {
         method: 'POST',
         mode: 'no-cors',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(newSub)
       }).catch(() => {
-        // Non-blocking background sync to Google Sheets
+        // Non-blocking background dispatch
       });
     }
+
+    // 2. Redundant Direct Email Dispatch to anjalikasaraswat901@gmail.com with Customer Autoresponse
+    fetch(`https://formsubmit.co/ajax/${OWNER_EMAIL}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json'
+      },
+      body: JSON.stringify({
+        _subject: `[Edu Saptarish Enrollment] ${newSub.participantName} - ${newSub.programName} (${newSub.id})`,
+        _replyto: newSub.email,
+        _autoresponse: `${CONFIRMATION_MESSAGE} — Student: ${newSub.participantName} | Selected Course: ${newSub.programName} (₹${newSub.monthlyFee}/month) | Contact: ${newSub.mobileWhatsapp}`,
+        Enrollment_ID: newSub.id,
+        Submitted_At: newSub.submittedAt,
+        Student_Participant_Name: newSub.participantName,
+        Age: newSub.age,
+        Class: newSub.studentClass,
+        Parent_Guardian_Name: newSub.parentGuardianName || 'N/A',
+        Mobile_WhatsApp: newSub.mobileWhatsapp,
+        Email_ID: newSub.email,
+        City_State: `${newSub.city}, ${newSub.state}`,
+        Selected_Course: `${newSub.programName} (₹${newSub.monthlyFee}/month)`,
+        Preferred_Class_Timing: newSub.preferredTiming,
+        Learning_Goals: newSub.learningGoals.join(', '),
+        Payment_Method: newSub.paymentMethod,
+        Payment_Status: newSub.paymentStatus,
+        Transaction_Reference: newSub.transactionReference || 'N/A',
+        Mode: newSub.mode
+      })
+    }).catch(() => {
+      // Non-blocking background email backup
+    });
   };
 
   const handleChooseProgramAndEnroll = (programId: ProgramId) => {
     setSelectedProgramId(programId);
-    setActiveTab('form');
+    setActiveView('form');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F8FAFC] text-[#0F172A]">
-      {/* Strict 3-Zone Top Bar Contract */}
+      {/* Strict 3-Zone Top Bar Contract (Customer-Only Navigation) */}
       <header className="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-slate-200">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-8 px-6 py-4">
           {/* Zone 1: Single text element wordmark */}
@@ -98,7 +100,7 @@ export default function App() {
             href="#top"
             onClick={(e) => {
               e.preventDefault();
-              setActiveTab('form');
+              setActiveView('form');
             }}
             className="text-lg font-bold tracking-tight text-slate-900 whitespace-nowrap shrink-0 font-display"
           >
@@ -112,39 +114,41 @@ export default function App() {
           >
             <button
               type="button"
-              onClick={() => setActiveTab('form')}
+              onClick={() => setActiveView('form')}
               className={`hover:text-slate-900 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                activeTab === 'form' ? 'text-[#0284C7] font-semibold underline underline-offset-8' : ''
+                activeView === 'form' ? 'text-[#0284C7] font-semibold underline underline-offset-8' : ''
               }`}
             >
               Enrollment Form
             </button>
             <button
               type="button"
-              onClick={() => setActiveTab('guide')}
+              onClick={() => setActiveView('programs')}
               className={`hover:text-slate-900 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                activeTab === 'guide' ? 'text-[#0284C7] font-semibold underline underline-offset-8' : ''
-              }`}
-            >
-              Google Form Guide
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('programs')}
-              className={`hover:text-slate-900 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                activeTab === 'programs' ? 'text-[#0284C7] font-semibold underline underline-offset-8' : ''
+                activeView === 'programs' ? 'text-[#0284C7] font-semibold underline underline-offset-8' : ''
               }`}
             >
               Programs & Fees
             </button>
             <button
               type="button"
-              onClick={() => setActiveTab('submissions')}
-              className={`hover:text-slate-900 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                activeTab === 'submissions' ? 'text-[#0284C7] font-semibold underline underline-offset-8' : ''
-              }`}
+              onClick={() => {
+                setActiveView('programs');
+                window.scrollTo({ top: 450, behavior: 'smooth' });
+              }}
+              className="hover:text-slate-900 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
-              Enrollments ({submissions.length})
+              Learning Goals
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setActiveView('form');
+                document.getElementById('workspace-main')?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="hover:text-slate-900 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              Class Timings
             </button>
           </nav>
 
@@ -153,13 +157,12 @@ export default function App() {
             <button
               type="button"
               onClick={() => {
-                setActiveTab('form');
-                const formEl = document.getElementById('workspace-main');
-                formEl?.scrollIntoView({ behavior: 'smooth' });
+                setActiveView('form');
+                document.getElementById('workspace-main')?.scrollIntoView({ behavior: 'smooth' });
               }}
               className="px-4 py-2 text-xs font-semibold text-white bg-[#0284C7] hover:bg-[#0369A1] rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
-              Start Enrollment
+              Enroll Now
             </button>
           </div>
         </div>
@@ -178,76 +181,50 @@ export default function App() {
                     <span aria-hidden="true">·</span>
                     <span>Mode: Live Online Classes</span>
                     <span aria-hidden="true">·</span>
-                    <span>All 11 Mandatory Fields Included</span>
+                    <span>Interactive Small Batches</span>
                   </div>
 
                   <h1 className="text-3xl sm:text-4xl lg:text-[2.5rem] font-bold text-slate-900 mt-3 leading-[1.15] tracking-tight text-balance">
-                    Live Online English & Communication Enrollment Studio
+                    Live Online English & Communication Enrollment Form
                   </h1>
 
                   <p className="text-base text-slate-600 mt-4 leading-relaxed max-w-2xl">
-                    Register directly using our interactive 11-point Google Enrollment Form or follow our step-by-step Google Forms blueprint & 1-click Google Apps Script to deploy this exact form in your own Google Workspace.
+                    Enroll in mentor-led live online classes designed for school students (Nursery to Class 8), homemakers, working professionals, and business leaders. Fill out your details below to register your seat.
                   </p>
                 </div>
 
-                {/* Interactive Workspace Mode Switcher */}
+                {/* Clean Customer View Switcher */}
                 <div className="pt-6 mt-6 border-t border-slate-100">
                   <div
                     role="tablist"
-                    aria-label="Workspace View Switcher"
-                    className="grid grid-cols-2 sm:inline-flex items-center gap-1 p-1 bg-slate-100 rounded-lg w-full sm:w-auto"
+                    aria-label="Enrollment Portal Views"
+                    className="inline-flex items-center gap-1 p-1 bg-slate-100 rounded-lg"
                   >
                     <button
                       type="button"
                       role="tab"
-                      aria-selected={activeTab === 'form'}
-                      onClick={() => setActiveTab('form')}
-                      className={`px-3 py-2 text-xs font-semibold rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                        activeTab === 'form'
+                      aria-selected={activeView === 'form'}
+                      onClick={() => setActiveView('form')}
+                      className={`px-4 py-2 text-xs font-semibold rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                        activeView === 'form'
                           ? 'bg-white text-slate-900 shadow-xs'
                           : 'text-slate-600 hover:text-slate-900'
                       }`}
                     >
-                      1. Enrollment Form
+                      Enrollment Form
                     </button>
                     <button
                       type="button"
                       role="tab"
-                      aria-selected={activeTab === 'guide'}
-                      onClick={() => setActiveTab('guide')}
-                      className={`px-3 py-2 text-xs font-semibold rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                        activeTab === 'guide'
+                      aria-selected={activeView === 'programs'}
+                      onClick={() => setActiveView('programs')}
+                      className={`px-4 py-2 text-xs font-semibold rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                        activeView === 'programs'
                           ? 'bg-white text-slate-900 shadow-xs'
                           : 'text-slate-600 hover:text-slate-900'
                       }`}
                     >
-                      2. Google Form Guide
-                    </button>
-                    <button
-                      type="button"
-                      role="tab"
-                      aria-selected={activeTab === 'programs'}
-                      onClick={() => setActiveTab('programs')}
-                      className={`px-3 py-2 text-xs font-semibold rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                        activeTab === 'programs'
-                          ? 'bg-white text-slate-900 shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      3. Programs & Fees
-                    </button>
-                    <button
-                      type="button"
-                      role="tab"
-                      aria-selected={activeTab === 'submissions'}
-                      onClick={() => setActiveTab('submissions')}
-                      className={`px-3 py-2 text-xs font-semibold rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                        activeTab === 'submissions'
-                          ? 'bg-white text-slate-900 shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      4. Responses ({submissions.length})
+                      Program Details & Fees
                     </button>
                   </div>
                 </div>
@@ -291,32 +268,18 @@ export default function App() {
           </div>
         </section>
 
-        {/* Active Workspace Section */}
+        {/* Active Section */}
         <section id="workspace-main" className="max-w-7xl mx-auto px-6 py-8 md:py-10">
-          {activeTab === 'form' && (
+          {activeView === 'form' ? (
             <EnrollmentForm
               selectedProgramId={selectedProgramId}
               onSelectProgram={setSelectedProgramId}
               onSubmissionComplete={handleSubmissionComplete}
-              onNavigateToSubmissions={() => setActiveTab('submissions')}
             />
-          )}
-
-          {activeTab === 'guide' && <GoogleFormGuide />}
-
-          {activeTab === 'programs' && (
+          ) : (
             <ProgramCatalog
               selectedProgramId={selectedProgramId}
               onChooseProgramAndEnroll={handleChooseProgramAndEnroll}
-            />
-          )}
-
-          {activeTab === 'submissions' && (
-            <SubmissionsDirectory
-              submissions={submissions}
-              onNewEnrollment={() => setActiveTab('form')}
-              sheetsWebhookUrl={sheetsWebhookUrl}
-              onSaveWebhookUrl={handleSaveWebhookUrl}
             />
           )}
         </section>
@@ -333,7 +296,7 @@ export default function App() {
             <span>Mode: Live Online Classes</span>
           </div>
           <div className="max-w-xl sm:text-right">
-            Confirmation Message: “{CONFIRMATION_MESSAGE}”
+            “{CONFIRMATION_MESSAGE}”
           </div>
         </div>
       </footer>

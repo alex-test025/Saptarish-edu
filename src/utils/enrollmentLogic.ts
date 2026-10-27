@@ -15,6 +15,11 @@ export interface ProgramOption {
   keyModules: string[];
 }
 
+export const OWNER_EMAIL = 'anjalikasaraswat901@gmail.com';
+
+export const DEFAULT_SHEETS_WEBHOOK_URL =
+  'https://script.google.com/macros/s/AKfycbwvYteM3fk2uI3eT2SfeHwjqKSb-2r-EoF8ecdzU6qC_5CKJ1_SJnlnIIJwa7SlJugAw/exec';
+
 export const PROGRAMS: ProgramOption[] = [
   {
     id: 'nursery-class-8',
@@ -127,6 +132,9 @@ export const PAYMENT_STATUSES = [
 export const CONFIRMATION_MESSAGE =
   'Thank you for choosing Edu Saptarish! Our team will contact you soon regarding enrollment and class schedules.';
 
+export const CUSTOMER_REPLY_GREETING =
+  'Thank you for choosing Edu Saptarish! Our team will contact you soon';
+
 export interface EnrollmentFormData {
   participantName: string;
   age: string;
@@ -184,7 +192,7 @@ export function calculateFeeSummary(programId: ProgramId): {
 } {
   const program = getProgramById(programId);
   const monthlyFee = program.monthlyFee;
-  const registrationFee = 0; // Zero hidden admission surcharge
+  const registrationFee = 0;
   const totalDueNow = monthlyFee + registrationFee;
   const formattedMonthly = `₹${monthlyFee.toLocaleString('en-IN')}`;
   const formattedTotal = `₹${totalDueNow.toLocaleString('en-IN')}`;
@@ -214,11 +222,16 @@ export function validateEnrollmentForm(data: EnrollmentFormData): {
   }
 
   if (program.isStudentTrack) {
-    if (!data.studentClass || data.studentClass.trim() === '' || data.studentClass === 'Not Applicable (Adult Learner)') {
+    if (
+      !data.studentClass ||
+      data.studentClass.trim() === '' ||
+      data.studentClass === 'Not Applicable (Adult Learner)'
+    ) {
       errors.studentClass = 'Please select the current school class (Nursery to Class 8).';
     }
     if (!data.parentGuardianName || data.parentGuardianName.trim().length < 2) {
-      errors.parentGuardianName = 'Parent or Guardian name is required for Nursery to Class 8 students.';
+      errors.parentGuardianName =
+        'Parent or Guardian name is required for Nursery to Class 8 students.';
     }
   } else if (parsedAge > 0 && parsedAge < 18) {
     if (!data.parentGuardianName || data.parentGuardianName.trim().length < 2) {
@@ -276,203 +289,83 @@ export function validateEnrollmentForm(data: EnrollmentFormData): {
   };
 }
 
-export function generateGoogleAppsScript(): string {
-  return `/**
- * Edu Saptarish – Learn, Speak, Grow!
- * Automated Google Enrollment Form Generator (Google Apps Script)
- *
- * HOW TO RUN:
- * 1. Open https://script.google.com and click "New Project"
- * 2. Paste this entire code into Code.gs and click Save
- * 3. Click "Run" -> Select "createEduSaptarishEnrollmentForm"
- * 4. Authorize permissions when prompted, then check the Execution Log for your live Form URLs!
- */
-function createEduSaptarishEnrollmentForm() {
-  var form = FormApp.create('Edu Saptarish – Learn, Speak, Grow! | Live Online Classes Enrollment Form');
+export function formatSubmissionAsCsvRow(sub: EnrollmentSubmission): string {
+  const headers = [
+    'Enrollment ID',
+    'Submitted At',
+    'Student/Participant Name',
+    'Age',
+    'Class',
+    'Parent/Guardian Name',
+    'Mobile/WhatsApp',
+    'Email',
+    'City',
+    'State',
+    'Program',
+    'Monthly Fee (INR)',
+    'Preferred Timing',
+    'Learning Goals',
+    'Payment Method',
+    'Payment Status',
+    'Transaction Ref',
+    'Mode'
+  ];
 
-  form.setDescription(
-    'Welcome to Edu Saptarish – Learn, Speak, Grow!\\n' +
-    'Mode of Instruction: Live Online Classes (Interactive Small Cohorts & Personalized Coaching)\\n\\n' +
-    'Program Fee Structure:\\n' +
-    '• Nursery to Class 8: ₹4,000 per month\\n' +
-    '• Homemakers: ₹5,000 per month\\n' +
-    '• Working Professionals: ₹5,000 per month\\n' +
-    '• Business Professionals: ₹5,000 per month\\n\\n' +
-    'Please complete all sections below to register your seat.'
-  );
+  const values = [
+    sub.id,
+    sub.submittedAt,
+    sub.participantName,
+    sub.age,
+    sub.studentClass,
+    sub.parentGuardianName || 'N/A',
+    sub.mobileWhatsapp,
+    sub.email,
+    sub.city,
+    sub.state,
+    sub.programName,
+    String(sub.monthlyFee),
+    sub.preferredTiming,
+    sub.learningGoals.join('; '),
+    sub.paymentMethod,
+    sub.paymentStatus,
+    sub.transactionReference || 'N/A',
+    sub.mode
+  ];
 
-  form.setCollectEmail(true);
-  form.setConfirmationMessage(
-    '${CONFIRMATION_MESSAGE}'
-  );
-
-  // SECTION 1: Participant & Guardian Profile
-  form.addSectionHeaderItem()
-    .setTitle('Section 1: Student / Participant Details')
-    .setHelpText('Provide accurate learner details for enrollment records and batch placement.');
-
-  // 1. Student/Participant Name
-  form.addTextItem()
-    .setTitle('1. Student / Participant Full Name')
-    .setRequired(true);
-
-  // 2. Age and Class (for students)
-  form.addTextItem()
-    .setTitle('2. Age and Current Class (Specify Age for all; mention Class if Nursery to Class 8)')
-    .setHelpText('Example: "10 years, Class 5" (for school students) or "32 years, N/A" (for adult learners)')
-    .setRequired(true);
-
-  // 3. Parent/Guardian Name (for children)
-  form.addTextItem()
-    .setTitle('3. Parent / Guardian Full Name (Mandatory for Nursery to Class 8 students)')
-    .setHelpText('Leave blank or write N/A if enrolling as an adult participant.')
-    .setRequired(false);
-
-  // SECTION 2: Contact & Location Information
-  form.addPageBreakItem()
-    .setTitle('Section 2: Contact & Location Details')
-    .setHelpText('Class links, schedule updates, and mentor feedback will be shared via WhatsApp and Email.');
-
-  // 4. Mobile/WhatsApp Number
-  var phoneValidation = FormApp.createTextValidation()
-    .setHelpText('Please enter a valid 10-digit Mobile / WhatsApp number.')
-    .requireTextMatchesPattern('^(\\\\+91[\\\\-\\\\s]?)?[6-9]\\\\d{9}$')
-    .build();
-
-  form.addTextItem()
-    .setTitle('4. Mobile / WhatsApp Number')
-    .setHelpText('Enter your active 10-digit WhatsApp number for live class links.')
-    .setValidation(phoneValidation)
-    .setRequired(true);
-
-  // 5. Email Address
-  var emailValidation = FormApp.createTextValidation()
-    .requireTextIsEmail()
-    .build();
-
-  form.addTextItem()
-    .setTitle('5. Email Address')
-    .setValidation(emailValidation)
-    .setRequired(true);
-
-  // 6. City and State
-  form.addTextItem()
-    .setTitle('6. City and State')
-    .setHelpText('Example: Bengaluru, Karnataka')
-    .setRequired(true);
-
-  // SECTION 3: Program Selection, Timing & Learning Goals
-  form.addPageBreakItem()
-    .setTitle('Section 3: Program Selection & Learning Preferences (Mode: Live Online Classes)')
-    .setHelpText('Choose your track, preferred batch slot, and communication goals.');
-
-  // 7. Select Program
-  var programItem = form.addMultipleChoiceItem();
-  programItem.setTitle('7. Select Program (Mode: Live Online Classes)')
-    .setChoices([
-      programItem.createChoice('Nursery to Class 8 — ₹4,000 per month'),
-      programItem.createChoice('Homemakers — ₹5,000 per month'),
-      programItem.createChoice('Working Professionals — ₹5,000 per month'),
-      programItem.createChoice('Business Professionals — ₹5,000 per month')
-    ])
-    .setRequired(true);
-
-  // 8. Preferred Class Timing
-  var timingItem = form.addListItem();
-  timingItem.setTitle('8. Preferred Class Timing (IST)')
-    .setChoices([
-      timingItem.createChoice('Morning Batch (07:30 AM – 08:30 AM IST)'),
-      timingItem.createChoice('Mid-Morning Batch (10:30 AM – 11:30 AM IST)'),
-      timingItem.createChoice('Afternoon School Batch (04:00 PM – 05:00 PM IST)'),
-      timingItem.createChoice('Evening Batch (06:00 PM – 07:00 PM IST)'),
-      timingItem.createChoice('Late Evening Professional Batch (08:30 PM – 09:30 PM IST)'),
-      timingItem.createChoice('Weekend Intensive Batch (Sat & Sun, 10:00 AM – 12:00 PM IST)')
-    ])
-    .setRequired(true);
-
-  // 9. Learning Goals
-  var goalsItem = form.addCheckboxItem();
-  goalsItem.setTitle('9. Learning Goals (Select all that apply)')
-    .setChoices([
-      goalsItem.createChoice('Spoken English'),
-      goalsItem.createChoice('Grammar'),
-      goalsItem.createChoice('Public Speaking'),
-      goalsItem.createChoice('Confidence Building'),
-      goalsItem.createChoice('Professional Communication')
-    ])
-    .setRequired(true);
-
-  // SECTION 4: Fee Payment & Enrollment Consent
-  form.addPageBreakItem()
-    .setTitle('Section 4: Payment Details & Enrollment Consent')
-    .setHelpText('Select your preferred payment mode and confirm enrollment terms.');
-
-  // 10A. Preferred Payment Method
-  var paymentMethodItem = form.addMultipleChoiceItem();
-  paymentMethodItem.setTitle('10A. Preferred Payment Method')
-    .setChoices([
-      paymentMethodItem.createChoice('UPI (Google Pay / PhonePe / Paytm)'),
-      paymentMethodItem.createChoice('Net Banking (NEFT / IMPS)'),
-      paymentMethodItem.createChoice('Credit / Debit Card'),
-      paymentMethodItem.createChoice('Bank QR Transfer')
-    ])
-    .setRequired(true);
-
-  // 10B. Payment Status
-  var paymentStatusItem = form.addMultipleChoiceItem();
-  paymentStatusItem.setTitle('10B. Payment Status')
-    .setChoices([
-      paymentStatusItem.createChoice('Paid – Transaction Completed'),
-      paymentStatusItem.createChoice('Pending – Request Payment Link on WhatsApp'),
-      paymentStatusItem.createChoice('Book Demo / Counseling Call First')
-    ])
-    .setRequired(true);
-
-  form.addTextItem()
-    .setTitle('Transaction Reference / UTR Number (Optional if Pending)')
-    .setRequired(false);
-
-  // 11. Consent Checkbox
-  var consentItem = form.addCheckboxItem();
-  consentItem.setTitle('11. Enrollment & Communication Consent')
-    .setChoices([
-      consentItem.createChoice('I confirm that the details provided above are accurate, and I consent to Edu Saptarish contacting me via Phone/WhatsApp/Email regarding Live Online Classes, schedules, and fee enrollment.')
-    ])
-    .setRequired(true);
-
-  Logger.log('Published Live Form URL: ' + form.getPublishedUrl());
-  Logger.log('Form Editor URL: ' + form.getEditUrl());
-}`;
+  const escapedValues = values.map((v) => `"${String(v).replace(/"/g, '""')}"`);
+  return `${headers.join(',')}\n${escapedValues.join(',')}`;
 }
-
-export const SUBMISSIONS_STORAGE_KEY = 'edu_saptarish_submissions_v1';
-export const WEBHOOK_STORAGE_KEY = 'edu_saptarish_sheets_webhook_v1';
 
 export function generateGoogleSheetsWebhookScript(): string {
   return `/**
- * Edu Saptarish – Live Website to Google Sheets Connector
- * Use this script so enrollments submitted on your Vercel website save directly to a Google Sheet!
+ * Edu Saptarish – Learn, Speak, Grow!
+ * Complete Automated Google Sheet + Google Drive CSV + Owner & Customer Email Script
  *
- * SETUP IN 4 STEPS:
- * 1. Open https://sheets.new and name the sheet "Edu Saptarish Enrollments"
- * 2. Click Extensions -> Apps Script, and paste this code into Code.gs
- * 3. Click Deploy -> New deployment -> Select type: "Web app"
- *    - Execute as: "Me"
- *    - Who has access: "Anyone"
- * 4. Click Deploy, copy the "Web app URL", and paste it into the "Connect Google Sheet" box on your website!
+ * WHAT THIS SCRIPT DOES AUTOMATICALLY ON EVERY FORM SUBMISSION:
+ * 1. Saves the student's 11-field record into your Google Sheet in Google Drive.
+ * 2. Creates/Updates "Edu_Saptarish_Enrollments_Summary.csv" in your Google Drive.
+ * 3. Sends an Email to Owner (${OWNER_EMAIL}) with all student details, Total Enrolled count, and the Master CSV attachment.
+ * 4. Sends an Confirmation Reply Email to the Customer (data.email) saying:
+ *    "${CUSTOMER_REPLY_GREETING}" along with their Student Name, Email ID, Contact Details, and Selected Course.
  */
+var OWNER_EMAIL = '${OWNER_EMAIL}';
+var MASTER_CSV_FILENAME = 'Edu_Saptarish_Enrollments_Summary.csv';
+
 function doPost(e) {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var headers = [
+    'Enrollment ID', 'Submitted At', 'Student/Participant Name', 'Age', 'Class',
+    'Parent/Guardian Name', 'Mobile/WhatsApp', 'Email', 'City', 'State',
+    'Program', 'Monthly Fee (INR)', 'Preferred Timing', 'Learning Goals',
+    'Payment Method', 'Payment Status', 'Transaction Ref', 'Mode'
+  ];
+
   if (sheet.getLastRow() === 0) {
-    sheet.appendRow([
-      'Enrollment ID', 'Submitted At', 'Student/Participant Name', 'Age', 'Class',
-      'Parent/Guardian Name', 'Mobile/WhatsApp', 'Email', 'City', 'State',
-      'Program', 'Monthly Fee (INR)', 'Preferred Timing', 'Learning Goals',
-      'Payment Method', 'Payment Status', 'Transaction Ref', 'Mode'
-    ]);
+    sheet.appendRow(headers);
   }
+
   var data = JSON.parse(e.postData.contents);
-  sheet.appendRow([
+  var newRow = [
     data.id || '',
     data.submittedAt || new Date().toLocaleString('en-IN'),
     data.participantName || '',
@@ -486,82 +379,120 @@ function doPost(e) {
     data.programName || '',
     data.monthlyFee || '',
     data.preferredTiming || '',
-    Array.isArray(data.learningGoals) ? data.learningGoals.join(', ') : (data.learningGoals || ''),
+    Array.isArray(data.learningGoals) ? data.learningGoals.join('; ') : (data.learningGoals || ''),
     data.paymentMethod || '',
     data.paymentStatus || '',
-    data.transactionReference || '',
+    data.transactionReference || 'N/A',
     data.mode || 'Live Online Classes'
-  ]);
-  return ContentService.createTextOutput(JSON.stringify({ status: 'ok', id: data.id }))
-    .setMimeType(ContentService.MimeType.JSON);
+  ];
+
+  // 1. Save row in Google Sheet (in your Google Drive)
+  sheet.appendRow(newRow);
+  var totalStudentsEnrolled = Math.max(1, sheet.getLastRow() - 1);
+
+  // Build Complete CSV Content of All Enrolled Students
+  var allValues = sheet.getDataRange().getValues();
+  var csvLines = [];
+  var totalMonthlyTuition = 0;
+
+  for (var i = 0; i < allValues.length; i++) {
+    var row = allValues[i];
+    if (i > 0 && !isNaN(Number(row[11]))) {
+      totalMonthlyTuition += Number(row[11]);
+    }
+    var escapedRow = row.map(function(cell) {
+      return '"' + String(cell).replace(/"/g, '""') + '"';
+    });
+    csvLines.push(escapedRow.join(','));
+  }
+
+  var fullCsvString = csvLines.join('\\n');
+
+  // 2. Save / Update Master CSV File in Google Drive
+  try {
+    var existingFiles = DriveApp.getFilesByName(MASTER_CSV_FILENAME);
+    if (existingFiles.hasNext()) {
+      existingFiles.next().setContent(fullCsvString);
+    } else {
+      DriveApp.createFile(MASTER_CSV_FILENAME, fullCsvString, MimeType.CSV);
+    }
+  } catch (driveErr) {
+    // Continues even if DriveApp scope is not yet authorized
+  }
+
+  // 3. Send Owner Notification Email + CSV Attachment to ${OWNER_EMAIL}
+  var ownerSubject = '[Edu Saptarish] New Enrollment #' + totalStudentsEnrolled + ': ' + data.participantName + ' (' + data.programName + ')';
+  var ownerBody = [
+    'New Student Enrollment Submitted on Edu Saptarish – Learn, Speak, Grow!',
+    '',
+    '• Total Students Enrolled So Far: ' + totalStudentsEnrolled,
+    '• Total Monthly Fee Committed: ₹' + totalMonthlyTuition.toLocaleString('en-IN') + ' / month',
+    '',
+    '--- SUBMITTED STUDENT DETAILS ---',
+    '• Enrollment ID: ' + (data.id || ''),
+    '• Student / Participant Name: ' + (data.participantName || ''),
+    '• Age & Class: ' + (data.age || '') + ' Years | ' + (data.studentClass || ''),
+    '• Parent / Guardian Name: ' + (data.parentGuardianName || 'N/A'),
+    '• Mobile / WhatsApp Number: ' + (data.mobileWhatsapp || ''),
+    '• Email ID: ' + (data.email || ''),
+    '• City & State: ' + (data.city || '') + ', ' + (data.state || ''),
+    '• Selected Course / Program: ' + (data.programName || '') + ' (₹' + (data.monthlyFee || '') + '/month)',
+    '• Preferred Class Timing: ' + (data.preferredTiming || ''),
+    '• Learning Goals: ' + (Array.isArray(data.learningGoals) ? data.learningGoals.join(', ') : ''),
+    '• Payment Method & Status: ' + (data.paymentMethod || '') + ' | ' + (data.paymentStatus || ''),
+    '• Mode: Live Online Classes'
+  ].join('\\n');
+
+  var csvBlob = Utilities.newBlob(fullCsvString, 'text/csv', MASTER_CSV_FILENAME);
+
+  MailApp.sendEmail({
+    to: OWNER_EMAIL,
+    replyTo: data.email || OWNER_EMAIL,
+    subject: ownerSubject,
+    body: ownerBody,
+    attachments: [csvBlob]
+  });
+
+  // 4. Send Auto-Reply Confirmation Email to Customer (data.email)
+  if (data.email && String(data.email).indexOf('@') !== -1) {
+    var customerSubject = 'Thank you for choosing Edu Saptarish! – Enrollment Confirmation (' + (data.id || '') + ')';
+    var customerBody = [
+      'Dear ' + (data.participantName || 'Learner') + ',',
+      '',
+      '${CONFIRMATION_MESSAGE}',
+      '',
+      'Here is a summary of the enrollment details you submitted:',
+      '--------------------------------------------------',
+      '• Reference ID: ' + (data.id || ''),
+      '• Student / Participant Name: ' + (data.participantName || ''),
+      '• Age & Class: ' + (data.age || '') + ' Years (' + (data.studentClass || '') + ')',
+      data.parentGuardianName ? ('• Parent / Guardian Name: ' + data.parentGuardianName) : null,
+      '• Email ID: ' + (data.email || ''),
+      '• Contact / WhatsApp Number: ' + (data.mobileWhatsapp || ''),
+      '• City & State: ' + (data.city || '') + ', ' + (data.state || ''),
+      '• Selected Course / Program: ' + (data.programName || '') + ' (₹' + (data.monthlyFee || '') + ' per month)',
+      '• Mode of Classes: Live Online Classes',
+      '• Preferred Class Timing: ' + (data.preferredTiming || ''),
+      '• Selected Learning Goals: ' + (Array.isArray(data.learningGoals) ? data.learningGoals.join(', ') : ''),
+      '• Payment Method & Status: ' + (data.paymentMethod || '') + ' (' + (data.paymentStatus || '') + ')',
+      '--------------------------------------------------',
+      '',
+      'Warm regards,',
+      'Team Edu Saptarish – Learn, Speak, Grow!'
+    ].filter(Boolean).join('\\n');
+
+    MailApp.sendEmail({
+      to: String(data.email).trim(),
+      replyTo: OWNER_EMAIL,
+      subject: customerSubject,
+      body: customerBody
+    });
+  }
+
+  return ContentService.createTextOutput(JSON.stringify({
+    status: 'ok',
+    id: data.id,
+    totalStudentsEnrolled: totalStudentsEnrolled
+  })).setMimeType(ContentService.MimeType.JSON);
 }`;
 }
-
-export const INITIAL_SUBMISSIONS: EnrollmentSubmission[] = [
-  {
-    id: 'ES-2026-1041',
-    submittedAt: '26 Oct 2026, 09:15 AM',
-    participantName: 'Aarav Sharma',
-    age: '11',
-    studentClass: 'Class 6',
-    parentGuardianName: 'Rohit Sharma',
-    mobileWhatsapp: '+91 9845012345',
-    email: 'rohit.sharma.parent@example.com',
-    city: 'Bengaluru',
-    state: 'Karnataka',
-    programId: 'nursery-class-8',
-    programName: 'Nursery to Class 8',
-    monthlyFee: 4000,
-    preferredTiming: 'Afternoon School Batch (04:00 PM – 05:00 PM IST)',
-    learningGoals: ['Spoken English', 'Grammar', 'Public Speaking', 'Confidence Building'],
-    paymentMethod: 'UPI (Google Pay / PhonePe / Paytm)',
-    paymentStatus: 'Paid – Transaction Completed',
-    transactionReference: 'UPI-629910482192',
-    consentAccepted: true,
-    mode: 'Live Online Classes'
-  },
-  {
-    id: 'ES-2026-1042',
-    submittedAt: '26 Oct 2026, 09:32 AM',
-    participantName: 'Meera Deshmukh',
-    age: '34',
-    studentClass: 'Not Applicable (Adult Learner)',
-    parentGuardianName: '',
-    mobileWhatsapp: '+91 9820154321',
-    email: 'meera.deshmukh@example.com',
-    city: 'Pune',
-    state: 'Maharashtra',
-    programId: 'homemakers',
-    programName: 'Homemakers',
-    monthlyFee: 5000,
-    preferredTiming: 'Mid-Morning Batch (10:30 AM – 11:30 AM IST)',
-    learningGoals: ['Spoken English', 'Confidence Building', 'Public Speaking'],
-    paymentMethod: 'UPI (Google Pay / PhonePe / Paytm)',
-    paymentStatus: 'Pending – Request Payment Link on WhatsApp',
-    transactionReference: '',
-    consentAccepted: true,
-    mode: 'Live Online Classes'
-  },
-  {
-    id: 'ES-2026-1043',
-    submittedAt: '26 Oct 2026, 09:44 AM',
-    participantName: 'Vikramaditya Nair',
-    age: '29',
-    studentClass: 'Not Applicable (Adult Learner)',
-    parentGuardianName: '',
-    mobileWhatsapp: '+91 9711223344',
-    email: 'vikram.nair@example.com',
-    city: 'Hyderabad',
-    state: 'Telangana',
-    programId: 'working-professionals',
-    programName: 'Working Professionals',
-    monthlyFee: 5000,
-    preferredTiming: 'Late Evening Professional Batch (08:30 PM – 09:30 PM IST)',
-    learningGoals: ['Professional Communication', 'Public Speaking', 'Confidence Building'],
-    paymentMethod: 'Credit / Debit Card',
-    paymentStatus: 'Paid – Transaction Completed',
-    transactionReference: 'TXN-88392011',
-    consentAccepted: true,
-    mode: 'Live Online Classes'
-  }
-];
